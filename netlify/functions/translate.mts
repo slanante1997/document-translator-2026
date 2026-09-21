@@ -12,7 +12,7 @@ import {
   HttpError,
   assertToken,
   assertWellFormedBlobName,
-  blobSasUrl,
+  containerScopedBlobUrl,
   handle,
   json,
   readEnv,
@@ -53,11 +53,13 @@ export default async (req: Request): Promise<Response> =>
 
     const env = readEnv();
 
-    // The service reads the source and writes the target itself, so each SAS
-    // carries only the permission that one direction needs. 4 hours comfortably
-    // outlives a long job without being a durable credential.
-    const sourceUrl = blobSasUrl(env.sourceContainer, blobName, 'r', 240);
-    const targetUrl = blobSasUrl(env.targetContainer, blobName, 'cw', 240);
+    // Permissions are exactly what Document Translation documents it needs:
+    // Read+List on the source, Write+List on the target. List forces these to be
+    // container-scoped; see containerScopedBlobUrl for why a blob SAS fails.
+    // 4 hours outlives a long job without being a durable credential, and these
+    // URLs go only to Azure, never to the browser.
+    const sourceUrl = containerScopedBlobUrl(env.sourceContainer, blobName, 'rl', 240);
+    const targetUrl = containerScopedBlobUrl(env.targetContainer, blobName, 'wl', 240);
 
     const res = await translatorFetch(`/translator/document/batches?api-version=${API_VERSION}`, {
       method: 'POST',

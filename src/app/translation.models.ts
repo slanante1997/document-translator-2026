@@ -39,11 +39,20 @@ export interface StatusResponse {
   error?: string;
 }
 
-/** Mirrors the server-side allowlist so the picker and validation agree. */
+/**
+ * Mirrors the server-side allowlist in netlify/lib/azure.mts so the file picker
+ * and the upload endpoint agree. Taken from the service's own formats endpoint.
+ */
 export const ACCEPTED_EXTENSIONS = [
-  '.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls',
-  '.txt', '.html', '.htm', '.md', '.markdown', '.csv', '.tsv',
-  '.rtf', '.odt', '.odp', '.ods', '.msg', '.xlf', '.xliff',
+  '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.odt', '.odp', '.ods', '.rtf',
+  '.pdf',
+  '.htm', '.html', '.mht', '.mhtml', '.dita', '.ditamap',
+  '.md', '.markdown', '.mdown', '.mdtext', '.mdtxt', '.mdwn', '.mkd', '.mkdn', '.rmd',
+  '.txt', '.csv', '.tsv', '.tab',
+  '.eml', '.msg',
+  '.srt', '.vtt',
+  '.xlf', '.xliff',
+  '.bmp', '.jpg', '.jpeg', '.png', '.webp',
 ];
 
 export const MAX_FILE_BYTES = 40 * 1024 * 1024;

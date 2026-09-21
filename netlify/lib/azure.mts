@@ -7,6 +7,7 @@
 import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
 import {
   BlobSASPermissions,
+  ContainerSASPermissions,
   SASProtocol,
   StorageSharedKeyCredential,
   generateBlobSASQueryParameters,
@@ -32,9 +33,24 @@ export const API_VERSION = '2024-05-01';
  * payloads in the storage account.
  */
 export const ALLOWED_EXTENSIONS = [
-  '.pdf', '.docx', '.doc', '.pptx', '.ppt', '.xlsx', '.xls',
-  '.txt', '.html', '.htm', '.md', '.markdown', '.csv', '.tsv',
-  '.rtf', '.odt', '.odp', '.ods', '.msg', '.xlf', '.xliff',
+  // Office and OpenDocument
+  '.doc', '.docx', '.ppt', '.pptx', '.xls', '.xlsx', '.odt', '.odp', '.ods', '.rtf',
+  // Portable documents
+  '.pdf',
+  // Markup and web
+  '.htm', '.html', '.mht', '.mhtml', '.dita', '.ditamap',
+  // Markdown, in every spelling the service recognises
+  '.md', '.markdown', '.mdown', '.mdtext', '.mdtxt', '.mdwn', '.mkd', '.mkdn', '.rmd',
+  // Plain text and delimited
+  '.txt', '.csv', '.tsv', '.tab',
+  // Mail
+  '.eml', '.msg',
+  // Subtitles
+  '.srt', '.vtt',
+  // Localisation interchange
+  '.xlf', '.xliff',
+  // Images: translated via OCR
+  '.bmp', '.jpg', '.jpeg', '.png', '.webp',
 ];
 
 /** Hard ceiling mirroring the service limit, so we fail early and clearly. */
@@ -181,6 +197,43 @@ export function blobSasUrl(
       ...(overrides.contentDisposition
         ? { contentDisposition: overrides.contentDisposition }
         : {}),
+    },
+    credential
+  ).toString();
+
+  const host = `https://${env.accountName}.blob.core.windows.net`;
+  return `${host}/${container}/${encodeURIComponent(blobName)}?${sas}`;
+}
+
+/**
+ * Mints a URL that points at one blob but carries a *container*-scoped SAS.
+ *
+ * Document Translation requires List on both sides (Read+List on the source,
+ * Write+List on the target), and List has no meaning on a blob-scoped SAS - a
+ * blob SAS makes the service fail with "Cannot access target document location
+ * with the current permissions". A container SAS appended to a blob URL
+ * satisfies it while still naming the exact file.
+ *
+ * These URLs are handed only to the Translator service, never to the browser.
+ * The browser's upload and download URLs stay blob-scoped via `blobSasUrl`.
+ */
+export function containerScopedBlobUrl(
+  container: string,
+  blobName: string,
+  permissions: string,
+  minutes: number
+): string {
+  const env = readEnv();
+  const credential = new StorageSharedKeyCredential(env.accountName, env.accountKey);
+
+  const sas = generateBlobSASQueryParameters(
+    {
+      containerName: container,
+      // Omitting blobName is what makes this a container SAS (sr=c).
+      permissions: ContainerSASPermissions.parse(permissions),
+      startsOn: new Date(Date.now() - 5 * 60_000),
+      expiresOn: new Date(Date.now() + minutes * 60_000),
+      protocol: SASProtocol.Https,
     },
     credential
   ).toString();

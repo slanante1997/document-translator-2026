@@ -42,6 +42,29 @@ secret store. The Translator subscription key and the storage account key live
 only in Netlify environment variables, read only by the functions in
 [netlify/functions/](netlify/functions/).
 
+### Why two kinds of SAS
+
+Four SAS URLs are minted, and they are deliberately scoped differently:
+
+| Used by | Scope | Permissions | Lifetime |
+| --- | --- | --- | --- |
+| Browser upload | single blob | `cw` | 30 min |
+| Browser download | single blob | `r` | 15 min |
+| Translator reads source | **container** | `rl` | 4 h |
+| Translator writes target | **container** | `wl` | 4 h |
+
+Document Translation requires **List** on both sides. `list` is a container-level
+permission with no blob-level equivalent, so a blob-scoped SAS makes the service
+fail the job with:
+
+```
+ValidationFailed: Cannot access target document location with the current permissions.
+```
+
+The container-scoped URLs still name the exact blob, and they go only to Azure —
+the browser never receives one. See `containerScopedBlobUrl` in
+[netlify/lib/azure.mts](netlify/lib/azure.mts).
+
 ### Why download links carry a token
 
 `/api/download-url` mints a read SAS for a blob in the target container. Without
@@ -72,12 +95,12 @@ need configuring.
 ### 1. CORS on the storage account
 
 The browser uploads directly to Blob Storage, so the storage account must allow
-it. In the Azure portal: **your storage account → Settings → Resource sharing
-(CORS) → Blob service**, then add a rule:
+it. In the Azure portal: **storage account `pdftranslatordocuments` → Settings →
+Resource sharing (CORS) → Blob service**, then add a rule:
 
 | Field | Value |
 | --- | --- |
-| Allowed origins | `https://your-site.netlify.app` (add `http://localhost:4200` and `http://localhost:8888` for local dev) |
+| Allowed origins | `https://document-translator-2026.netlify.app` (add `http://localhost:8888` and `http://localhost:4200` for local dev) |
 | Allowed methods | `PUT`, `GET`, `OPTIONS` |
 | Allowed headers | `x-ms-blob-type, content-type` |
 | Exposed headers | `*` |
