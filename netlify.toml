@@ -6,6 +6,19 @@
 [build.environment]
   NODE_VERSION = "22.22.0"
 
+  # Netlify's secret scanner treats every environment variable as secret and
+  # fails the build if it finds the value anywhere in the repo or build output.
+  #
+  # These five are identifiers, not credentials: the account name, both
+  # container names and the endpoint all appear in the SAS URLs the browser is
+  # handed on every upload and download, and the region is a public Azure name.
+  # Documenting them in the README is therefore not a leak.
+  #
+  # AZURE_TRANSLATOR_KEY, AZURE_STORAGE_ACCOUNT_KEY and SIGNING_SECRET are
+  # deliberately NOT listed here - those are real secrets and must keep failing
+  # the build if they ever appear in a tracked file.
+  SECRETS_SCAN_OMIT_KEYS = "AZURE_STORAGE_ACCOUNT_NAME,AZURE_SOURCE_CONTAINER,AZURE_TARGET_CONTAINER,AZURE_TRANSLATOR_ENDPOINT,AZURE_TRANSLATOR_REGION"
+
 # Angular is a single-page app: every non-API, non-asset path must fall through
 # to index.html so client-side routing works on a hard refresh.
 # Functions declare their own `/api/*` paths via `export const config`, and
