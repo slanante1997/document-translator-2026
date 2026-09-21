@@ -1,1 +1,62 @@
-/* You can add global styles to this file, and also import other style files */
+/* Design tokens. Every colour the app uses is defined here once, then
+   redefined for dark mode, so components never hard-code a hex value. */
+:root {
+  --bg: #f6f7f9;
+  --surface: #ffffff;
+  --surface-sunken: #f1f3f5;
+  --border: #e4e7eb;
+  --border-strong: #d2d7de;
+  --text: #16191d;
+  --text-muted: #666e7a;
+  --accent: #0b5cd5;
+  --accent-hover: #0a4fb5;
+  --accent-soft: #eaf1fd;
+  --ok-bg: #edf8f0;
+  --ok-border: #c5e6d0;
+  --err-bg: #fdefef;
+  --err-border: #f3cdcd;
+  --err-text: #9b1c1c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0e1116;
+    --surface: #171b21;
+    --surface-sunken: #1f242c;
+    --border: #2a3039;
+    --border-strong: #3a424e;
+    --text: #e6e9ee;
+    --text-muted: #9aa4b2;
+    --accent: #4d91ff;
+    --accent-hover: #6ba4ff;
+    --accent-soft: #14233d;
+    --ok-bg: #12251a;
+    --ok-border: #24512f;
+    --err-bg: #2a1616;
+    --err-border: #5c2626;
+    --err-text: #f3b5b5;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}

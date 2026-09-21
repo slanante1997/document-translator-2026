@@ -1,0 +1,34 @@
+[build]
+  command = "npm run build"
+  publish = "dist/document-translator-2026/browser"
+  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "22.22.0"
+
+# Angular is a single-page app: every non-API, non-asset path must fall through
+# to index.html so client-side routing works on a hard refresh.
+# Functions declare their own `/api/*` paths via `export const config`, and
+# those are matched before this rule.
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Hashed build output is immutable, so it can be cached indefinitely.
+[[headers]]
+  for = "/*.js"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/*.css"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
