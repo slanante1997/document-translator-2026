@@ -1,0 +1,147 @@
+.notes-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.notes-head h2 {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.status {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.status--warn {
+  color: var(--err-text);
+}
+
+.hint {
+  margin: 0;
+  font-size: 0.875rem;
+  color: var(--text-muted);
+}
+
+/* --- conflict -------------------------------------------------------------- */
+
+.conflict__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+}
+
+.conflict__actions .link-button {
+  color: inherit;
+}
+
+/* --- editor ---------------------------------------------------------------- */
+
+.notes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+/* [hidden] loses to the display rule above without this. */
+.notes-body[hidden] {
+  display: none;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.tool {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0 0.65rem;
+  font: inherit;
+  font-size: 0.8125rem;
+  color: inherit;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.tool:hover:not(:disabled):not(.tool--disabled) {
+  border-color: var(--accent);
+}
+
+.tool:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.tool:disabled,
+.tool--disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.editor {
+  min-height: 14rem;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 0.85rem 1rem;
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: 10px;
+  font-size: 0.9375rem;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+  cursor: text;
+}
+
+.editor:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.editor--loading {
+  opacity: 0.5;
+  cursor: progress;
+}
+
+.editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+/* Content is inserted at runtime, outside Angular's view encapsulation. */
+.editor ::ng-deep img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+  vertical-align: bottom;
+}
+
+.editor ::ng-deep p,
+.editor ::ng-deep ul,
+.editor ::ng-deep ol {
+  margin: 0 0 0.6em;
+}
+
+.editor ::ng-deep a {
+  color: var(--accent);
+}
+
+.editor ::ng-deep table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+
+.editor ::ng-deep td,
+.editor ::ng-deep th {
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+}

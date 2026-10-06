@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { NotesComponent } from './notes.component';
 import { TranslationService } from './translation.service';
 import {
   ACCEPTED_EXTENSIONS,
@@ -12,7 +13,7 @@ import {
 
 @Component({
   selector: 'app-root',
-  imports: [FormsModule, DecimalPipe],
+  imports: [FormsModule, DecimalPipe, NotesComponent],
   templateUrl: './app.component.html',
   styleUrl: './app.component.css',
 })

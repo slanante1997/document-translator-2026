@@ -1,4 +1,5 @@
 import { Injectable } from '@angular/core';
+import { readJson } from './http';
 import type { Language, StatusResponse, UploadTicket } from './translation.models';
 
 /** Gap between status polls. Document jobs are measured in tens of seconds. */
@@ -31,7 +32,7 @@ export interface TranslateResult {
 export class TranslationService {
   async listLanguages(): Promise<Language[]> {
     const res = await fetch('/api/languages');
-    const body = await this.readJson<{ languages: Language[] }>(res, 'Could not load languages');
+    const body = await readJson<{ languages: Language[] }>(res, 'Could not load languages');
     return body.languages;
   }
 
@@ -44,7 +45,7 @@ export class TranslationService {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ filename: file.name, size: file.size }),
     });
-    const ticket = await this.readJson<UploadTicket>(ticketRes, 'Could not prepare the upload');
+    const ticket = await readJson<UploadTicket>(ticketRes, 'Could not prepare the upload');
 
     // 2. PUT the bytes straight to Azure, bypassing the function payload limit.
     await this.uploadToBlob(ticket.uploadUrl, file, opts.onUploadProgress);
@@ -61,7 +62,7 @@ export class TranslationService {
         ...(sourceLanguage ? { sourceLanguage } : {}),
       }),
     });
-    const { jobId } = await this.readJson<{ jobId: string }>(
+    const { jobId } = await readJson<{ jobId: string }>(
       startRes,
       'Could not start the translation'
     );
@@ -81,7 +82,7 @@ export class TranslationService {
       language: targetLanguage,
     });
     const dlRes = await fetch(`/api/download-url?${params}`);
-    const { downloadUrl } = await this.readJson<{ downloadUrl: string }>(
+    const { downloadUrl } = await readJson<{ downloadUrl: string }>(
       dlRes,
       'Could not create a download link'
     );
@@ -140,7 +141,7 @@ export class TranslationService {
 
     for (;;) {
       const res = await fetch(`/api/status?jobId=${encodeURIComponent(jobId)}`);
-      const status = await this.readJson<StatusResponse>(res, 'Lost track of the translation');
+      const status = await readJson<StatusResponse>(res, 'Lost track of the translation');
 
       if (status.done) return status;
       onProgress(status.progress);
@@ -150,20 +151,5 @@ export class TranslationService {
       }
       await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
     }
-  }
-
-  /** Unwraps a function response, preferring the server's error text over a status code. */
-  private async readJson<T>(res: Response, fallback: string): Promise<T> {
-    let body: unknown;
-    try {
-      body = await res.json();
-    } catch {
-      throw new Error(`${fallback} (HTTP ${res.status}).`);
-    }
-    if (!res.ok) {
-      const message = (body as { error?: string })?.error;
-      throw new Error(message || `${fallback} (HTTP ${res.status}).`);
-    }
-    return body as T;
   }
 }

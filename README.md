@@ -74,6 +74,32 @@ signature must be presented to start a translation or to download a result.
 
 ---
 
+## Notes scratchpad
+
+Below the translator is a **Notes** box: a single scratchpad you can type into
+or paste text and images into. It autosaves and syncs across devices.
+
+- **Storage.** The whole scratchpad is one JSON blob, `scratchpad.json`, in its
+  own container (`AZURE_NOTES_CONTAINER`, default `notes`). The functions create
+  the container on the first save. Like documents, the content goes straight
+  between the browser and Blob Storage on 5-minute SAS URLs, which the
+  functions mint.
+- **Access.** There is no passphrase or login. Anyone who opens the site can
+  read and edit the notes, so keep the site URL private and do not put anything
+  sensitive in them.
+- **Images** are downscaled to at most 2000 px on the long edge, re-encoded as
+  WebP (JPEG where WebP is unsupported) and embedded in the document. The
+  whole scratchpad is capped at **25 MB**.
+- **Pasted HTML** goes through Angular's sanitizer before it reaches the page,
+  both on paste and on load. Scripts, event handlers and inline styles are
+  stripped. Bold, italics, lists, links and tables survive.
+- **Two devices.** Each save sends the version (ETag) it was loaded from. If the
+  stored copy has changed since, the save is refused, and the UI asks whether
+  to load the latest copy or overwrite it. A tab that comes back into focus with
+  nothing unsaved quietly reloads newer notes first.
+
+---
+
 ## Project layout
 
 | Path | What it is |
@@ -81,8 +107,11 @@ signature must be presented to start a translation or to download a result.
 | [src/app/app.component.ts](src/app/app.component.ts) | The whole UI: file selection, language pickers, progress, result |
 | [src/app/translation.service.ts](src/app/translation.service.ts) | Drives the upload → translate → poll → download pipeline |
 | [src/app/translation.models.ts](src/app/translation.models.ts) | Shared types, size and extension limits |
-| [netlify/functions/](netlify/functions/) | The five API endpoints |
+| [src/app/notes.component.ts](src/app/notes.component.ts) | The Notes scratchpad: editor, paste/drop, autosave, conflicts |
+| [src/app/notes.service.ts](src/app/notes.service.ts) | Loads and saves the scratchpad; compresses pasted images |
+| [netlify/functions/](netlify/functions/) | The API endpoints: five for translation, two for notes |
 | [netlify/lib/azure.mts](netlify/lib/azure.mts) | SAS minting, HMAC tokens, env validation, error shaping |
+| [netlify/lib/notes.mts](netlify/lib/notes.mts) | Notes blob ETag, container creation |
 | [netlify.toml](netlify.toml) | Build command, publish dir, SPA fallback, security headers |
 
 ---
@@ -137,6 +166,7 @@ deployed site.
 | `AZURE_SOURCE_CONTAINER` | Container uploads land in |
 | `AZURE_TARGET_CONTAINER` | Container Azure writes translations to |
 | `SIGNING_SECRET` | Any long random string. Generate with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `AZURE_NOTES_CONTAINER` | Optional, defaults to `notes`. Created automatically on first save |
 
 `.env` is gitignored. Do not commit real keys.
 
@@ -203,3 +233,7 @@ add the real site URL to the storage account's CORS origins.
 Nothing deletes old blobs. Both containers grow with every translation. Add a
 [lifecycle management rule](https://learn.microsoft.com/azure/storage/blobs/lifecycle-management-overview)
 on the storage account to expire blobs after a few days.
+
+**Scope that rule to the source and target containers** (blob prefix filters
+`source/` and `target/`). A rule that covers the whole account would also
+delete the notes after the same few days.

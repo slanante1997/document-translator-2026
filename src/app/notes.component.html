@@ -1,0 +1,69 @@
+<section class="card" aria-labelledby="notes-title">
+  <div class="notes-head">
+    <h2 id="notes-title">Notes</h2>
+    @if (view() === 'ready') {
+      <span
+        class="status"
+        [class.status--warn]="saveState() === 'failed' || saveState() === 'conflict'"
+        role="status"
+        aria-live="polite"
+      >{{ statusLabel() }}</span>
+    }
+  </div>
+
+  @if (saveState() === 'conflict') {
+    <div class="notice notice--error" role="alert">
+      <p>These notes were changed on another device since you opened them here. Your latest edits are not saved yet.</p>
+      <div class="conflict__actions">
+        <button type="button" class="link-button" (click)="loadLatest()">Discard mine and load the latest</button>
+        <button type="button" class="link-button" (click)="keepMine()">Keep mine and overwrite</button>
+      </div>
+    </div>
+  }
+
+  @if (error(); as problem) {
+    <div class="notice notice--error" role="alert">
+      <p>{{ problem }}</p>
+      @if (view() === 'error') {
+        <button type="button" class="link-button" (click)="load()">Try again</button>
+      }
+    </div>
+  }
+
+  <!-- Hidden rather than removed, so the editor element always exists. -->
+  <div class="notes-body" [hidden]="view() === 'error'">
+    <div class="toolbar" role="toolbar" aria-label="Formatting" aria-controls="notes-editor">
+      <!-- mousedown is cancelled so the editor keeps its selection. -->
+      <button type="button" class="tool" title="Bold (Ctrl+B)" aria-label="Bold" [disabled]="view() !== 'ready'"
+        (mousedown)="$event.preventDefault()" (click)="format('bold')"><strong>B</strong></button>
+      <button type="button" class="tool" title="Italic (Ctrl+I)" aria-label="Italic" [disabled]="view() !== 'ready'"
+        (mousedown)="$event.preventDefault()" (click)="format('italic')"><em>I</em></button>
+      <button type="button" class="tool" title="Bulleted list" aria-label="Bulleted list" [disabled]="view() !== 'ready'"
+        (mousedown)="$event.preventDefault()" (click)="format('insertUnorderedList')">&bull;&thinsp;List</button>
+      <label class="tool" [class.tool--disabled]="view() !== 'ready'" title="Insert image">
+        <input type="file" class="sr-only" accept="image/*" multiple [disabled]="view() !== 'ready'" (change)="onImagePicked($event)" />
+        Image
+      </label>
+    </div>
+
+    <div
+      #editor
+      id="notes-editor"
+      class="editor"
+      [class.editor--loading]="view() === 'loading'"
+      [attr.contenteditable]="view() === 'ready' ? 'true' : 'false'"
+      role="textbox"
+      aria-multiline="true"
+      aria-labelledby="notes-title"
+      data-placeholder="Type, or paste text and images&hellip;"
+      (input)="onInput()"
+      (paste)="onPaste($event)"
+      (dragover)="onDragOver($event)"
+      (drop)="onDrop($event)"
+    ></div>
+
+    @if (view() === 'loading') {
+      <p class="hint">Loading your notes&hellip;</p>
+    }
+  </div>
+</section>
