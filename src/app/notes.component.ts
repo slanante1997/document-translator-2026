@@ -13,8 +13,12 @@ import {
 import { DomSanitizer } from '@angular/platform-browser';
 import { ConflictError, NotesService } from './notes.service';
 
-/** Quiet period after the last keystroke before autosaving. */
-const SAVE_DELAY_MS = 1_200;
+/**
+ * Quiet period after the last keystroke before autosaving. Every save is a
+ * function call plus a blob write, so this is long enough to batch a burst of
+ * typing; leaving the tab flushes immediately regardless.
+ */
+const SAVE_DELAY_MS = 4_000;
 /** Back-off before retrying a save that failed for a transient reason. */
 const RETRY_DELAY_MS = 10_000;
 
