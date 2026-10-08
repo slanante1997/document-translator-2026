@@ -23,6 +23,9 @@ interface StoredNotes {
   savedAt: string;
 }
 
+/** The server rejected the password; the caller should ask for it again. */
+export class UnauthorizedError extends Error {}
+
 /** The stored notes changed on another device since they were loaded here. */
 export class ConflictError extends Error {}
 
@@ -30,13 +33,13 @@ export class ConflictError extends Error {}
  * Loads and saves the synced scratchpad.
  *
  * Like the translation flow, the notes body goes straight between the browser
- * and Blob Storage on short-lived SAS URLs; the functions only hand those
- * URLs out.
+ * and Blob Storage on short-lived SAS URLs. The functions check the password
+ * on every call and only then hand those URLs out.
  */
 @Injectable({ providedIn: 'root' })
 export class NotesService {
-  async load(): Promise<NotesSnapshot> {
-    const { etag, readUrl } = await this.meta();
+  async load(key: string): Promise<NotesSnapshot> {
+    const { etag, readUrl } = await this.meta(key);
     if (!readUrl) return { html: '', etag: null };
 
     const res = await fetch(readUrl, { cache: 'no-store' });
@@ -48,15 +51,15 @@ export class NotesService {
   }
 
   /** Current stored version, without downloading the notes. */
-  async peekEtag(): Promise<string | null> {
-    return (await this.meta()).etag;
+  async peekEtag(key: string): Promise<string | null> {
+    return (await this.meta(key)).etag;
   }
 
   /**
    * Saves the notes and returns the new ETag. Refuses with ConflictError if
    * the stored copy is no longer `baseEtag`, unless `force` is set.
    */
-  async save(html: string, baseEtag: string | null, force = false): Promise<string | null> {
+  async save(key: string, html: string, baseEtag: string | null, force = false): Promise<string | null> {
     const stored: StoredNotes = { version: 1, html, savedAt: new Date().toISOString() };
     const blob = new Blob([JSON.stringify(stored)], { type: 'application/json' });
 
@@ -67,9 +70,10 @@ export class NotesService {
 
     const ticketRes = await fetch('/api/notes-upload-url', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...keyHeader(key) },
       body: JSON.stringify({ size: blob.size, baseEtag, force }),
     });
+    if (ticketRes.status === 401) throw new UnauthorizedError('Incorrect password.');
     if (ticketRes.status === 409) {
       throw new ConflictError((await ticketRes.json().catch(() => null))?.error ?? 'Conflict.');
     }
@@ -91,7 +95,7 @@ export class NotesService {
     if (!putRes.ok) throw new Error(`Saving to Azure failed (HTTP ${putRes.status}).`);
 
     // ETag is only readable if the CORS rule exposes it; otherwise ask the server.
-    return putRes.headers.get('etag') ?? (await this.peekEtag());
+    return putRes.headers.get('etag') ?? (await this.peekEtag(key));
   }
 
   /**
@@ -124,10 +128,16 @@ export class NotesService {
     return canvas.toDataURL('image/jpeg', IMAGE_QUALITY);
   }
 
-  private async meta(): Promise<{ etag: string | null; readUrl: string | null }> {
-    const res = await fetch('/api/notes', { cache: 'no-store' });
+  private async meta(key: string): Promise<{ etag: string | null; readUrl: string | null }> {
+    const res = await fetch('/api/notes', { headers: keyHeader(key), cache: 'no-store' });
+    if (res.status === 401) throw new UnauthorizedError('Incorrect password.');
     return readJson(res, 'Could not load notes');
   }
+}
+
+/** URI-encoded because header values cannot carry arbitrary Unicode. */
+function keyHeader(key: string): Record<string, string> {
+  return { 'x-notes-key': encodeURIComponent(key) };
 }
 
 function readAsDataUrl(file: Blob): Promise<string> {

@@ -1,6 +1,6 @@
 /**
- * POST /api/notes-upload-url  { size, baseEtag, force? }
- *   -> { uploadUrl }
+ * POST /api/notes-upload-url   (header x-notes-key: <password>)
+ *   { size, baseEtag, force? } -> { uploadUrl }
  *
  * Mints a short-lived write SAS for the scratchpad blob. `baseEtag` is the
  * version the browser last loaded; if the stored notes have moved on since
@@ -12,6 +12,7 @@ import { HttpError, blobSasUrl, handle, json } from '../lib/azure.mts';
 import {
   MAX_NOTES_BYTES,
   NOTES_BLOB,
+  assertNotesKey,
   currentNotesEtag,
   ensureNotesContainer,
   notesContainer,
@@ -26,6 +27,7 @@ interface Body {
 export default async (req: Request): Promise<Response> =>
   handle(async () => {
     if (req.method !== 'POST') throw new HttpError(405, 'Use POST.');
+    await assertNotesKey(req);
 
     const body = (await req.json().catch(() => ({}))) as Body;
     const size = typeof body.size === 'number' ? body.size : NaN;

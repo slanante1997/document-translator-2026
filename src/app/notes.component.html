@@ -2,14 +2,35 @@
   <div class="notes-head">
     <h2 id="notes-title">Notes</h2>
     @if (view() === 'ready') {
-      <span
-        class="status"
-        [class.status--warn]="saveState() === 'failed' || saveState() === 'conflict'"
-        role="status"
-        aria-live="polite"
-      >{{ statusLabel() }}</span>
+      <span class="notes-head__actions">
+        <span
+          class="status"
+          [class.status--warn]="saveState() === 'failed' || saveState() === 'conflict'"
+          role="status"
+          aria-live="polite"
+        >{{ statusLabel() }}</span>
+        <button type="button" class="link-button" (click)="lock()">Lock</button>
+      </span>
     }
   </div>
+
+  @if (view() === 'locked') {
+    <form class="unlock" (submit)="unlock($event)">
+      <label for="notes-password" class="sr-only">Password</label>
+      <input
+        id="notes-password"
+        type="password"
+        autocomplete="current-password"
+        placeholder="Enter password to open notes"
+        [value]="password()"
+        (input)="onPasswordInput($event)"
+        [disabled]="unlocking()"
+      />
+      <button type="submit" class="primary unlock__button" [disabled]="!password() || unlocking()">
+        @if (unlocking()) { Opening&hellip; } @else { Open }
+      </button>
+    </form>
+  }
 
   @if (saveState() === 'conflict') {
     <div class="notice notice--error" role="alert">
@@ -31,7 +52,7 @@
   }
 
   <!-- Hidden rather than removed, so the editor element always exists. -->
-  <div class="notes-body" [hidden]="view() === 'error'">
+  <div class="notes-body" [hidden]="view() === 'locked' || view() === 'error'">
     <div class="toolbar" role="toolbar" aria-label="Formatting" aria-controls="notes-editor">
       <!-- mousedown is cancelled so the editor keeps its selection. -->
       <button type="button" class="tool" title="Bold (Ctrl+B)" aria-label="Bold" [disabled]="view() !== 'ready'"

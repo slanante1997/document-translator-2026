@@ -1,5 +1,6 @@
 /**
- * GET /api/notes -> { etag, readUrl }
+ * GET /api/notes   (header x-notes-key: <password>)
+ *   -> { etag, readUrl }
  *
  * Returns a short-lived read SAS for the scratchpad rather than its contents,
  * so notes full of pasted images never pass through a function body. Both
@@ -7,11 +8,12 @@
  */
 import type { Config } from '@netlify/functions';
 import { HttpError, blobSasUrl, handle, json } from '../lib/azure.mts';
-import { NOTES_BLOB, currentNotesEtag, notesContainer } from '../lib/notes.mts';
+import { NOTES_BLOB, assertNotesKey, currentNotesEtag, notesContainer } from '../lib/notes.mts';
 
 export default async (req: Request): Promise<Response> =>
   handle(async () => {
     if (req.method !== 'GET') throw new HttpError(405, 'Use GET.');
+    await assertNotesKey(req);
 
     const etag = await currentNotesEtag();
     // 5 minutes: the browser fetches it immediately and never stores it.

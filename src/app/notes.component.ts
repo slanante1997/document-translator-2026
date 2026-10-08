@@ -11,7 +11,7 @@ import {
   viewChild,
 } from '@angular/core';
 import { DomSanitizer } from '@angular/platform-browser';
-import { ConflictError, NotesService } from './notes.service';
+import { ConflictError, NotesService, UnauthorizedError } from './notes.service';
 
 /**
  * Quiet period after the last keystroke before autosaving. Every save is a
@@ -22,7 +22,15 @@ const SAVE_DELAY_MS = 4_000;
 /** Back-off before retrying a save that failed for a transient reason. */
 const RETRY_DELAY_MS = 10_000;
 
-type View = 'loading' | 'ready' | 'error';
+/**
+ * Where the password is kept once the server has accepted it. Session storage
+ * lasts only for the browser tab's lifetime, then the password is asked again.
+ * The password itself is checked server-side on every request (see
+ * netlify/lib/notes.mts); the browser holds no copy of the expected value.
+ */
+const KEY_STORAGE = 'notes.key';
+
+type View = 'locked' | 'loading' | 'ready' | 'error';
 type SaveState = 'saved' | 'dirty' | 'saving' | 'failed' | 'conflict';
 
 const STATUS_LABELS: Record<SaveState, string> = {
@@ -51,9 +59,13 @@ export class NotesComponent implements OnDestroy {
   private readonly sanitizer = inject(DomSanitizer);
   private readonly editor = viewChild.required<ElementRef<HTMLDivElement>>('editor');
 
-  readonly view = signal<View>('loading');
+  private key: string | null = readStoredKey();
+
+  readonly view = signal<View>(this.key ? 'loading' : 'locked');
   readonly saveState = signal<SaveState>('saved');
   readonly error = signal<string | null>(null);
+  readonly password = signal('');
+  readonly unlocking = signal(false);
 
   readonly statusLabel = computed(() => STATUS_LABELS[this.saveState()]);
   readonly hasUnsaved = computed(() => this.saveState() !== 'saved');
@@ -69,11 +81,57 @@ export class NotesComponent implements OnDestroy {
 
   constructor() {
     // The editor element must exist before notes can be written into it.
-    afterNextRender(() => void this.load());
+    // Nothing is fetched while locked, so the notes never reach the page early.
+    afterNextRender(() => {
+      if (this.view() !== 'locked') void this.load();
+    });
   }
 
   ngOnDestroy(): void {
     clearTimeout(this.saveTimer);
+  }
+
+  // --- lock / unlock -------------------------------------------------------------
+
+  onPasswordInput(event: Event): void {
+    this.password.set((event.target as HTMLInputElement).value);
+    this.error.set(null);
+  }
+
+  async unlock(event: Event): Promise<void> {
+    event.preventDefault();
+    const attempt = this.password();
+    if (!attempt || this.unlocking()) return;
+
+    // The server is the judge: a wrong password comes back as a 401 from load.
+    this.key = attempt;
+    this.unlocking.set(true);
+    const ok = await this.load();
+    this.unlocking.set(false);
+
+    if (ok) {
+      storeKey(attempt);
+      this.password.set('');
+    }
+  }
+
+  lock(): void {
+    if (this.hasUnsaved() && !confirm('Some changes have not been saved yet. Lock anyway and lose them?')) {
+      return;
+    }
+    this.resetToLocked(null);
+  }
+
+  /** Forgets the password and clears the editor, optionally explaining why. */
+  private resetToLocked(message: string | null): void {
+    clearTimeout(this.saveTimer);
+    forgetStoredKey();
+    this.key = null;
+    this.setEditorHtml('');
+    this.etag = null;
+    this.saveState.set('saved');
+    this.error.set(message);
+    this.view.set('locked');
   }
 
   // --- load / save -------------------------------------------------------------
@@ -82,29 +140,35 @@ export class NotesComponent implements OnDestroy {
    * Replaces the editor with the stored notes. A background refresh keeps the
    * editor usable and backs off if the user starts typing mid-request.
    */
-  async load(background = false): Promise<void> {
+  async load(background = false): Promise<boolean> {
+    if (!this.key) return false;
     clearTimeout(this.saveTimer);
     if (!background) {
-      this.view.set('loading');
+      // While unlocking, the password form stays up until the server answers.
+      if (this.view() !== 'locked') this.view.set('loading');
       this.error.set(null);
     }
 
     const startRevision = this.revision;
     try {
-      const snapshot = await this.api.load();
-      if (background && this.revision !== startRevision) return;
+      const snapshot = await this.api.load(this.key);
+      if (background && this.revision !== startRevision) return false;
 
       this.setEditorHtml(snapshot.html);
       this.etag = snapshot.etag;
       this.saveState.set('saved');
       this.error.set(null);
       this.view.set('ready');
+      return true;
     } catch (err) {
-      // A failed background refresh leaves the current notes in place.
-      if (!background) {
+      if (err instanceof UnauthorizedError) {
+        this.resetToLocked(err.message);
+      } else if (!background) {
+        // A failed background refresh leaves the current notes in place.
         this.error.set(messageOf(err));
-        this.view.set('error');
+        if (this.view() !== 'locked') this.view.set('error');
       }
+      return false;
     }
   }
 
@@ -112,14 +176,14 @@ export class NotesComponent implements OnDestroy {
     clearTimeout(this.saveTimer);
     // A save already in flight re-checks the revision when it lands and
     // schedules another if needed, so overlapping requests are never sent.
-    if (this.saving || this.view() !== 'ready') return;
+    if (!this.key || this.saving || this.view() !== 'ready') return;
 
     const startRevision = this.revision;
     this.saving = true;
     this.saveState.set('saving');
 
     try {
-      this.etag = await this.api.save(this.editor().nativeElement.innerHTML, this.etag, force);
+      this.etag = await this.api.save(this.key, this.editor().nativeElement.innerHTML, this.etag, force);
       this.error.set(null);
       if (this.revision !== startRevision) {
         this.saveState.set('dirty');
@@ -131,6 +195,8 @@ export class NotesComponent implements OnDestroy {
       if (err instanceof ConflictError) {
         // Stop autosaving until the user decides which copy wins.
         this.saveState.set('conflict');
+      } else if (err instanceof UnauthorizedError) {
+        this.resetToLocked(err.message);
       } else {
         this.saveState.set('failed');
         this.error.set(messageOf(err));
@@ -253,12 +319,14 @@ export class NotesComponent implements OnDestroy {
    * types over a stale one.
    */
   private async refreshIfStale(): Promise<void> {
-    if (this.view() !== 'ready' || this.saveState() !== 'saved') return;
+    if (!this.key || this.view() !== 'ready' || this.saveState() !== 'saved') return;
     try {
-      const latest = await this.api.peekEtag();
+      const latest = await this.api.peekEtag(this.key);
       if (latest !== this.etag && this.saveState() === 'saved') await this.load(true);
-    } catch {
-      // A stale view is harmless: the next save is refused as a conflict.
+    } catch (err) {
+      if (err instanceof UnauthorizedError) this.resetToLocked(err.message);
+      // Anything else leaves a stale view, which is harmless: the next save
+      // is refused as a conflict.
     }
   }
 
@@ -360,4 +428,30 @@ function hasVisibleText(html: string): boolean {
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : 'Something went wrong.';
+}
+
+// Storage can throw in private windows or with site data blocked; the box
+// then simply asks for the password on every visit.
+function readStoredKey(): string | null {
+  try {
+    return sessionStorage.getItem(KEY_STORAGE);
+  } catch {
+    return null;
+  }
+}
+
+function storeKey(key: string): void {
+  try {
+    sessionStorage.setItem(KEY_STORAGE, key);
+  } catch {
+    /* not remembered for this tab */
+  }
+}
+
+function forgetStoredKey(): void {
+  try {
+    sessionStorage.removeItem(KEY_STORAGE);
+  } catch {
+    /* nothing stored */
+  }
 }

@@ -84,9 +84,17 @@ or paste text and images into. It autosaves and syncs across devices.
   the container on the first save. Like documents, the content goes straight
   between the browser and Blob Storage on 5-minute SAS URLs, which the
   functions mint.
-- **Access.** There is no passphrase or login. Anyone who opens the site can
-  read and edit the notes, so keep the site URL private and do not put anything
-  sensitive in them.
+- **Access.** Both notes functions require a password, sent URI-encoded in an
+  `x-notes-key` header, and refuse every request without it (401). The read
+  and write SAS URLs are only minted after that check, and the container is
+  private, so the link alone gets nobody in. The Notes box stays hidden until
+  the server accepts the password; the browser then keeps it in
+  `sessionStorage` until the tab is closed or **Lock** is clicked.
+- **The password** is stored only as an scrypt hash (`PASSWORD_SALT` and
+  `PASSWORD_HASH` in [netlify/lib/notes.mts](netlify/lib/notes.mts)), which is
+  slow by design so it cannot practically be recovered from the repository.
+  Each wrong guess is delayed 750 ms. To change it, generate a new pair with
+  the command in that file's comment, paste both values in and redeploy.
 - **Images** are downscaled to at most 2000 px on the long edge, re-encoded as
   WebP (JPEG where WebP is unsupported) and embedded in the document. The
   whole scratchpad is capped at **25 MB**.
